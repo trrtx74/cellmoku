@@ -1,0 +1,9 @@
+{
+  "file": "ckpt_s3_i0900.onnx",
+  "checkpoint": "ckpt_s3_i0900.pt",
+  "iteration": 900,
+  "stage": 3,
+  "board_size": 15,
+  "in_channels": 10,
+  "quantized": false
+}
