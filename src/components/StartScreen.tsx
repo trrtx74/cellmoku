@@ -8,40 +8,33 @@ const Container = styled.div`
   align-items: center;
   height: 100%;
   width: 100%;
-  gap: 20px;
+  gap: 28px;
   position: relative;
   z-index: 10;
+  padding: 20px;
 `;
 
-const LogoTop = styled.div`
-  font-size: 4rem;
-  font-weight: bold;
-  background-image: linear-gradient(to bottom right, #ff50d6, #f3bae6); /* 선형 그라데이션 */
-  -webkit-background-clip: text; /* WebKit 브라우저용 */
+const Logo = styled.div`
+  font-size: 4.5rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  background-image: ${({ theme }) => theme.gradients.logo};
+  -webkit-background-clip: text;
   background-clip: text;
-  color: transparent; /* 텍스트 색상을 투명하게 */
-  display: inline-block; /* 그라데이션이 텍스트 너비에 맞게 적용되도록 */
-  /* color: ${({ theme }) => theme.colors.primary}; */
-  /* text-shadow: 0 0 20px ${({ theme }) => theme.colors.primary}; */
+  color: transparent;
   text-align: center;
-  line-height: 1.0;
+  line-height: 1;
+
+  @media (max-width: 768px) {
+    font-size: 3rem;
+  }
 `;
 
-const LogoBottom = styled.div`
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  span {
-    font-size: 2.5rem;
-    font-weight: bold;
-    color: #6b5700;
-    text-shadow: 10px 5px 20px ${({ theme }) => theme.colors.jelly},
-      10px -5px 20px ${({ theme }) => theme.colors.jelly},
-      -10px -5px 20px ${({ theme }) => theme.colors.jelly},
-      -10px 5px 20px ${({ theme }) => theme.colors.jelly};
-    display: block;
-  }
+const Tagline = styled.div`
+  font-size: 1rem;
+  color: ${({ theme }) => theme.colors.secondary};
+  font-weight: 600;
+  letter-spacing: 0.02em;
 `;
 
 const RulesCard = styled.div`
@@ -49,72 +42,67 @@ const RulesCard = styled.div`
   justify-content: center;
   align-items: center;
   flex-direction: column;
+  gap: 2px;
 
   p {
     font-size: 0.9rem;
     color: ${({ theme }) => theme.colors.textSecondary};
+    text-align: center;
   }
 `;
 
 const ButtonGroup = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
   width: 100%;
   max-width: 300px;
 `;
 
 const MenuButton = styled.button`
-  padding: 20px;
-  font-size: 1.5rem;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid ${({ theme }) => theme.colors.primary};
-  color: ${({ theme }) => theme.colors.text};
+  padding: 18px;
+  font-size: 1.4rem;
+  background: ${({ theme }) => theme.colors.surface};
+  border: 1.5px solid ${({ theme }) => theme.colors.primary};
+  color: ${({ theme }) => theme.colors.primary};
   border-radius: 16px;
-  backdrop-filter: blur(5px);
-  font-weight: bold;
+  font-weight: 700;
   transition: ${({ theme }) => theme.transitions.fast};
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.12);
 
   &:hover {
     background: ${({ theme }) => theme.colors.primary};
-    transform: scale(1.05);
+    color: #fff;
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 `;
 
 export const StartScreen = () => {
   const { startGame, language } = useGameStore();
 
-  const rulesCard = <RulesCard>
-    <p>
-      {language === 'ko'
-        ? '상자에서 젤리를 뽑으세요.'
-        : 'Draw jellies from the box.'}
-    </p>
-    <p>
-      {language === 'ko'
-        ? '많이 뽑을수록 점수를 더 많이 획득합니다.'
-        : 'The more you draw, the more points you get.'}
-    </p>
-    <p>
-      {language === 'ko'
-        ? '하지만 조심하세요! 총알이 뽑히면 점수를 잃습니다.'
-        : 'But be careful! If bullets are drawn, you lose points.'}
-    </p>
-  </RulesCard>
-
   return (
     <Container>
-
       <div>
-        <LogoTop>
-          RUSSIAN
-        </LogoTop>
-        <LogoBottom>
-          JELLY
-        </LogoBottom>
+        <Logo>CELLMOKU</Logo>
+        <Tagline>{language === 'ko' ? '개척 오목' : 'Frontier Gomoku'}</Tagline>
       </div>
 
-      {rulesCard}
+      <RulesCard>
+        <p>
+          {language === 'ko'
+            ? '말을 놓고, 획득한 칸으로 보드를 넓혀 나가세요.'
+            : 'Place stones and expand the board with the cells you earn.'}
+        </p>
+        <p>
+          {language === 'ko'
+            ? '먼저 5개를 나란히 잇는 사람이 승리합니다.'
+            : 'The first to connect five in a row wins.'}
+        </p>
+      </RulesCard>
 
       <ButtonGroup>
         <MenuButton onClick={() => startGame('VS_CPU')}>
@@ -124,8 +112,6 @@ export const StartScreen = () => {
           {language === 'ko' ? '2인 대결' : '2 Players'}
         </MenuButton>
       </ButtonGroup>
-
-
     </Container>
   );
 };

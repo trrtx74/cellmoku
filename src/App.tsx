@@ -6,8 +6,13 @@ import { theme } from './styles/theme';
 import GameBoard from './components/GameBoard';
 import { Navbar } from './components/Navbar';
 import { StartScreen } from './components/StartScreen';
+import { DifficultySelect } from './components/DifficultySelect';
 import { HelpModal } from './components/HelpModal';
+import { DebugPanel } from './components/DebugPanel';
 import { useGameStore } from './store/useGameStore';
+
+// const DEBUG = import.meta.env.DEV;
+const DEBUG = true;
 
 const Container = styled.div`
   width: 100vw;
@@ -39,13 +44,20 @@ function App() {
       <Container>
         <Navbar onOpenHelp={() => setIsHelpOpen(true)} />
         <ContentsWrapper>
-          {status === 'IDLE' ? <StartScreen /> : <GameBoard />}
+          {status === 'IDLE' ? (
+            <StartScreen />
+          ) : status === 'DIFFICULTY_SELECT' ? (
+            <DifficultySelect />
+          ) : (
+            <GameBoard />
+          )}
         </ContentsWrapper>
         <HelpModal
           isOpen={isHelpOpen}
           onClose={() => setIsHelpOpen(false)}
           language={language}
         />
+        {DEBUG && <DebugPanel />}
       </Container>
     </ThemeProvider>
   );
