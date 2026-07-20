@@ -15,8 +15,20 @@ export interface AgentMove {
 export interface AgentConfig {
   sims: number; // stone-root MCTS simulations
   cellSims: number; // cell-root MCTS simulations
-  temperature: number; // visit-count / scoring temperature
-  tempMoves: number; // greedy after this many plies
+  temperature: number; // stone-choice sampling temperature
+  tempMoves: number; // stones on board after which the stone choice turns greedy
+  /**
+   * Cell-placement sampling temperature — a difficulty knob independent of
+   * `temperature`. 0 = greedy, matching evaluate.py's play path.
+   */
+  cellTemperature: number;
+  /**
+   * Stones on board after which cell placement turns greedy — the cell-side
+   * counterpart to `tempMoves`. Both gates read the same board snapshot (the
+   * stone count at the start of the turn) so the two are on one scale.
+   * Note `cellTemperature` only bites while this gate is open.
+   */
+  cellTempMoves: number;
   useVcf: boolean; // enable VCF hard-proof override
   vcfMaxPly: number; // VCF search depth
 }
@@ -36,9 +48,9 @@ export interface CellmokuAgent {
 // ~6 s at 128. This runs in a worker, so it delays the CPU's reply without
 // freezing the UI.
 export const PRESETS: Record<Difficulty, AgentConfig> = {
-  easy: { sims: 32, cellSims: 32, temperature: 0.0, tempMoves: 0, useVcf: true, vcfMaxPly: 2 },
-  medium: { sims: 64, cellSims: 64, temperature: 0.0, tempMoves: 0, useVcf: true, vcfMaxPly: 2 },
-  hard: { sims: 128, cellSims: 128, temperature: 0.0, tempMoves: 0, useVcf: true, vcfMaxPly: 2 },
+  easy: { sims: 32, cellSims: 32, temperature: 0.0, tempMoves: 0, cellTemperature: 0.0, cellTempMoves: 0, useVcf: true, vcfMaxPly: 2 },
+  medium: { sims: 64, cellSims: 64, temperature: 0.0, tempMoves: 0, cellTemperature: 0.0, cellTempMoves: 0, useVcf: true, vcfMaxPly: 2 },
+  hard: { sims: 128, cellSims: 128, temperature: 0.0, tempMoves: 0, cellTemperature: 0.0, cellTempMoves: 0, useVcf: true, vcfMaxPly: 2 },
 };
 
 export const presetFor = (d: Difficulty): AgentConfig => ({ ...PRESETS[d] });

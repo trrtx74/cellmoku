@@ -17,7 +17,6 @@ import {
 } from '../../game/types';
 import { applyStone, applyCell } from '../../game/engine';
 import { legalMask } from '../../game/obs';
-import type { ProvedStatusValue } from './vcf';
 
 /** Async leaf evaluator — net.infer semantics: legal-masked softmax policy over
  * 225 actions for the current phase + scalar value (win−loss) in [-1, 1],
@@ -41,8 +40,6 @@ export class MCTSNode {
   /** Terminal result at this node, or null when non-terminal (mcts.py node.result). */
   result: Winner = null;
   netValue = 0;
-  /** VCF proved status tag (§2.4). */
-  proved: ProvedStatusValue = 0;
 
   constructor(player: Player, phase: Phase) {
     this.player = player;

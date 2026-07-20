@@ -5,13 +5,16 @@ import { BOARD_CELLS, type GameState, type Pos } from '../../game/types';
 import { applyStone, applyCell } from '../../game/engine';
 import { legalMask } from '../../game/obs';
 import { MCTS, type Evaluator } from './mcts';
-import { vcfScan } from './vcf';
+import { vcfScan, forcedBlock, safeCellMask } from './vcf';
 import type { AgentConfig, AgentMove } from './types';
 
 /** Sample an action from a distribution over BOARD_CELLS (np.random.choice). */
 function sampleFrom(policy: Float32Array, rng: () => number = Math.random): Pos {
   let r = rng();
   for (let a = 0; a < BOARD_CELLS; a++) {
+    // Skip zero-mass (illegal) actions: with r === 0 the `r <= 0` test below
+    // would otherwise hand back the first index regardless of its legality.
+    if (policy[a] <= 0) continue;
     r -= policy[a];
     if (r <= 0) return a;
   }
@@ -20,20 +23,35 @@ function sampleFrom(policy: Float32Array, rng: () => number = Math.random): Pos 
   return 0;
 }
 
-/** evaluate.py cell pick: argmax(policy * legal), fallback first legal. */
-function pickCellGreedy(policy: Float32Array, legal: Uint8Array): Pos {
+/** evaluate.py cell pick: argmax(policy * mask), fallback to the first allowed. */
+function pickMasked(policy: Float32Array, mask: Uint8Array): Pos {
   let best = -1;
   let bestVal = 0;
-  let firstLegal = -1;
+  let first = -1;
   for (let a = 0; a < BOARD_CELLS; a++) {
-    if (!legal[a]) continue;
-    if (firstLegal < 0) firstLegal = a;
+    if (!mask[a]) continue;
+    if (first < 0) first = a;
     if (policy[a] > bestVal) {
       bestVal = policy[a];
       best = a;
     }
   }
-  return best >= 0 && bestVal > 1e-12 ? best : firstLegal;
+  return best >= 0 && bestVal > 1e-12 ? best : first;
+}
+
+/** Sample from `policy` restricted to `mask` (renormalised over the allowed set). */
+function sampleMasked(policy: Float32Array, mask: Uint8Array, rng: () => number): Pos {
+  let total = 0;
+  for (let a = 0; a < BOARD_CELLS; a++) if (mask[a]) total += policy[a];
+  if (total <= 1e-12) return pickMasked(policy, mask); // no mass here — take the fallback
+  let r = rng() * total;
+  for (let a = 0; a < BOARD_CELLS; a++) {
+    if (!mask[a] || policy[a] <= 0) continue;
+    r -= policy[a];
+    if (r <= 0) return a;
+  }
+  for (let a = BOARD_CELLS - 1; a >= 0; a--) if (mask[a] && policy[a] > 0) return a;
+  return pickMasked(policy, mask);
 }
 
 function countStones(s: GameState): number {
@@ -64,20 +82,32 @@ export async function computeTurn(
 
   // ── VCF override (§9.2): a hard-proved forced win plays out the whole turn ──
   if (config.useVcf && config.vcfMaxPly > 0) {
-    const seq = vcfScan(state, null, config.vcfMaxPly);
+    const seq = vcfScan(state, config.vcfMaxPly);
     if (seq !== null) {
       return { stone: seq[0], cells: seq.slice(1) };
     }
   }
 
   const mcts = new MCTS(evaluator);
+  // One snapshot for both temperature gates, so `tempMoves` and `cellTempMoves`
+  // are read on the same scale (the stone placed this turn does not shift one
+  // of them relative to the other).
+  const stonesOnBoard = countStones(state);
 
-  // ── stone search ──
-  const root = await mcts.search(state, Math.max(1, config.sims));
-  const temperature =
-    countStones(state) < config.tempMoves ? Math.max(0, config.temperature) : 0;
-  const stonePolicy = root.visitPolicy(temperature);
-  const stone = sampleFrom(stonePolicy, rng);
+  // ── stone choice ──
+  // A forced block skips the search entirely: the move is not a matter of
+  // judgement, and routing it through the visit distribution would let
+  // temperature sampling throw the game away.
+  const block = config.useVcf ? forcedBlock(state) : null;
+  let stone: Pos;
+  if (block !== null) {
+    stone = block;
+  } else {
+    const root = await mcts.search(state, Math.max(1, config.sims));
+    const temperature =
+      stonesOnBoard < config.tempMoves ? Math.max(0, config.temperature) : 0;
+    stone = sampleFrom(root.visitPolicy(temperature), rng);
+  }
 
   let s = applyStone(state, stone);
   const cells: Pos[] = [];
@@ -86,16 +116,26 @@ export async function computeTurn(
   if (s.phase === 'CELL' && s.winner === null) {
     let node =
       config.cellSims > 0 ? await mcts.search(s, config.cellSims) : null;
+    const cellTemp =
+      stonesOnBoard < config.cellTempMoves ? Math.max(0, config.cellTemperature) : 0;
 
     while (s.phase === 'CELL' && s.winner === null) {
       const legal = legalMask(s);
-      let cellPolicy: Float32Array;
-      if (node && node.nTotal > 0) {
-        cellPolicy = node.visitPolicy(0);
-      } else {
-        cellPolicy = (await evaluator.evaluate(s)).policy; // net-prior fallback
-      }
-      const a = pickCellGreedy(cellPolicy, legal);
+      // Screen out placements that would open a five for the opponent. Only
+      // matters once cells are sampled, but it is cheap enough to always run.
+      const usable = (config.useVcf ? safeCellMask(s, legal) : null) ?? legal;
+
+      const policy =
+        node && node.nTotal > 0
+          // temp 0 -> take raw visit shares and argmax below, so that masking
+          // still picks the *best* allowed cell rather than an arbitrary one
+          ? node.visitPolicy(cellTemp > 0 ? cellTemp : 1)
+          : (await evaluator.evaluate(s)).policy; // net-prior fallback
+
+      const a = cellTemp > 0
+        ? sampleMasked(policy, usable, rng)
+        : pickMasked(policy, usable);
+
       cells.push(a);
       s = applyCell(s, a);
       node = node?.children.get(a) ?? null;

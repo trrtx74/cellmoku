@@ -2,10 +2,9 @@
 // 15×15 board — threat semantics are board-size independent for these shapes).
 import { describe, it, expect } from 'vitest';
 import { BOARD_CELLS, toPos, type GameState, type Player, type Phase } from '../../game/types';
-import { checkWin } from '../../game/rules';
+import { checkWin, frontierMask } from '../../game/rules';
+import { applyCell } from '../../game/engine';
 import {
-  ProvedStatus,
-  type ProvedStatusValue,
   winsAt,
   completionCells,
   hasImmediateCompletion,
@@ -13,7 +12,9 @@ import {
   anyDefenseWinsForOpp,
   evalAfterMyTurn,
   proveMyTurn,
-  classifyMove,
+  isHardProvedWin,
+  forcedBlock,
+  safeCellMask,
   vcfScan,
 } from './vcf';
 
@@ -120,22 +121,14 @@ describe('completionCells', () => {
     expect(completionCells(cells, stones, 1)).toEqual(new Set([P(2, 4), P(6, 4)]));
   });
 
-  it('fuzzy_remove drops a completion; fuzzy_add enables one', () => {
+  it('excluding a square drops the completion that depends on it', () => {
     const { cells, stones } = blank();
     line(cells, stones, 4, 0, 4, 1);
     cells[P(4, 4)] = 1;
     expect(completionCells(cells, stones, 1).has(P(4, 4))).toBe(true);
     expect(
-      completionCells(cells, stones, 1, new Set(), new Set([P(4, 4)])).has(P(4, 4)),
+      completionCells(cells, stones, 1, new Set([P(4, 4)])).has(P(4, 4)),
     ).toBe(false);
-
-    const b = blank();
-    line(b.cells, b.stones, 4, 0, 4, 2);
-    // (4,4) hole
-    expect(completionCells(b.cells, b.stones, 2).size).toBe(0);
-    expect(
-      completionCells(b.cells, b.stones, 2, new Set([P(4, 4)])).has(P(4, 4)),
-    ).toBe(true);
   });
 });
 
@@ -245,32 +238,168 @@ describe('evalAfterMyTurn', () => {
     cells[P(2, 4)] = 1;
     cells[P(8, 8)] = 1; // spare legal square
     const s = mkState(cells, stones, 2); // currentPlayer = opp(2)
-    expect(evalAfterMyTurn(s, 1, 2, { mode: 'worst', set: new Set() })).toBe(false);
+    expect(evalAfterMyTurn(s, 1, 2)).toBe(false);
   });
 
-  it('SOFT split: worst defers, optimistic proves (fuzzy-gated opp completion)', () => {
+  it('worst case: completions resting on neutral cells are discounted', () => {
     const { cells, stones } = blank();
-    for (const c of [1, 2, 3, 4]) {
-      stones[P(4, c)] = 1; cells[P(4, c)] = 1;
-      stones[P(6, c)] = 1; cells[P(6, c)] = 1;
+    for (const r of [4, 6]) {
+      for (const c of [1, 2, 3, 4]) { stones[P(r, c)] = 1; cells[P(r, c)] = 1; }
+      cells[P(r, 5)] = 1; // completion square
     }
-    cells[P(4, 5)] = 1; // completion (4,5)
-    cells[P(6, 5)] = 1; // completion (6,5)
-    for (let c = 0; c < 4; c++) { stones[P(2, c)] = 2; cells[P(2, c)] = 1; }
-    cells[P(2, 4)] = 1; // f: fuzzy cell gating opp completion
-    cells[P(8, 8)] = 1;
-    const s = mkState(cells, stones, 2); // opp to move
-    const f = new Set([P(2, 4)]);
-    expect(evalAfterMyTurn(s, 1, 2, { mode: 'worst', set: f })).toBe(false);
-    expect(evalAfterMyTurn(s, 1, 2, { mode: 'optimistic', set: f })).toBe(true);
+    cells[P(8, 8)] = 1; // spare legal square for the opponent
+    const s = mkState(cells, stones, 2); // opp to move; P1 is the attacker
+
+    // both completion squares count -> double threat -> forced win
+    expect(evalAfterMyTurn(s, 1, 2)).toBe(true);
+    // ...but a proof may not lean on squares the attacker only placed neutrally
+    expect(evalAfterMyTurn(s, 1, 2, new Set([P(4, 5), P(6, 5)]))).toBe(false);
   });
 });
 
-describe('classifyMove / vcfScan', () => {
-  it('cross double-threat stone classifies HARD', () => {
-    expect(classifyMove(crossDoubleThreat(1), P(4, 4), 2)).toBe(
-      ProvedStatus.HARD_PROVED_WIN,
-    );
+describe('forcedBlock', () => {
+  /** P2 has four in a row; only (7,8) completes it (col 3 is not a cell). */
+  const oppOpenFour = (extraCells: Array<[number, number]> = []) => {
+    const { cells, stones } = blank();
+    for (let c = 4; c <= 10; c++) cells[P(7, c)] = 1;
+    for (let c = 4; c < 8; c++) stones[P(7, c)] = 2;
+    cells[P(9, 9)] = 1;
+    cells[P(9, 10)] = 1;
+    for (const [r, c] of extraCells) cells[P(r, c)] = 1;
+    return { cells, stones };
+  };
+
+  it('returns the threat square when the opponent completes 5 next turn', () => {
+    const { cells, stones } = oppOpenFour();
+    expect(forcedBlock(mkState(cells, stones, 1))).toBe(P(7, 8));
+  });
+
+  it('returns null when there is no threat', () => {
+    const { cells, stones } = blank();
+    for (let c = 4; c <= 10; c++) cells[P(7, c)] = 1;
+    for (let c = 4; c < 7; c++) stones[P(7, c)] = 2; // only three
+    expect(forcedBlock(mkState(cells, stones, 1))).toBeNull();
+  });
+
+  it('defers to our own win — attacking beats defending', () => {
+    const { cells, stones } = oppOpenFour();
+    // give P1 its own immediate completion at (9,8)
+    for (let c = 4; c < 8; c++) { cells[P(9, c)] = 1; stones[P(9, c)] = 1; }
+    cells[P(9, 8)] = 1;
+    const s = mkState(cells, stones, 1);
+    expect(completionCells(s.cells, s.stones, 1).size).toBeGreaterThan(0);
+    expect(forcedBlock(s)).toBeNull();
+    // vcfScan takes the win instead
+    expect(vcfScan(s, 2)).toEqual([P(9, 8)]);
+  });
+
+  it('is not gated by the offensive prefilter (defends with few own stones)', () => {
+    // mover has 0 stones — vcfScan bails on prefilter, defence must not
+    const { cells, stones } = oppOpenFour();
+    const s = mkState(cells, stones, 1);
+    expect(vcfScan(s, 2)).toBeNull();
+    expect(forcedBlock(s)).toBe(P(7, 8));
+  });
+
+  it('blocking removes exactly the blocked square from the threat set', () => {
+    // both ends open -> two threats; we are lost, but the invariant must hold
+    const { cells, stones } = blank();
+    for (let c = 2; c <= 10; c++) cells[P(7, c)] = 1;
+    for (let c = 4; c < 8; c++) stones[P(7, c)] = 2;
+    const s = mkState(cells, stones, 1);
+    const threats = completionCells(s.cells, s.stones, 2);
+    expect(threats).toEqual(new Set([P(7, 3), P(7, 8)]));
+
+    const chosen = forcedBlock(s)!;
+    expect(threats.has(chosen)).toBe(true);
+    const after = s.stones.slice();
+    after[chosen] = 1;
+    const remaining = completionCells(s.cells, after, 2);
+    expect(remaining).toEqual(new Set([...threats].filter((t) => t !== chosen)));
+  });
+
+  it('only applies at stone phase', () => {
+    const { cells, stones } = oppOpenFour();
+    expect(forcedBlock(mkState(cells, stones, 1, 'CELL', 1))).toBeNull();
+  });
+});
+
+describe('safeCellMask', () => {
+  /** Opponent has four in a row whose completing square (7,8) is still a HOLE:
+   *  turning it into a cell would hand them the win. */
+  const nearMiss = () => {
+    const { cells, stones } = blank();
+    for (let r = 6; r <= 8; r++) for (let c = 4; c <= 7; c++) cells[P(r, c)] = 1;
+    for (let c = 4; c < 8; c++) stones[P(7, c)] = 2;
+    return mkState(cells, stones, 1, 'CELL', 1);
+  };
+
+  it('excludes a cell that would open a five for the opponent', () => {
+    const s = nearMiss();
+    const legal = frontierMask(s.cells);
+    expect(legal[P(7, 8)]).toBe(1); // it is a legal placement...
+    expect(completionCells(s.cells, s.stones, 2).size).toBe(0); // ...and no threat yet
+
+    const safe = safeCellMask(s, legal)!;
+    expect(safe).not.toBeNull();
+    expect(safe[P(7, 8)]).toBe(0); // screened out
+    expect(safe[P(5, 5)]).toBe(1); // a harmless placement survives
+
+    // placing it really would create the threat
+    const opened = applyCell(s, P(7, 8));
+    expect(completionCells(opened.cells, opened.stones, 2).has(P(7, 8))).toBe(true);
+  });
+
+  it('returns null when the opponent cannot complete five at all', () => {
+    const { cells, stones } = blank();
+    for (let r = 6; r <= 8; r++) for (let c = 4; c <= 7; c++) cells[P(r, c)] = 1;
+    for (let c = 4; c < 6; c++) stones[P(7, c)] = 2; // only two stones
+    const s = mkState(cells, stones, 1, 'CELL', 1);
+    expect(safeCellMask(s, frontierMask(s.cells))).toBeNull();
+  });
+});
+
+describe('defence outranks a multi-turn win', () => {
+  /** P1 can force a win in 2 plies via the cross square (4,4); optionally P2
+   *  also has an immediate five at (10,8), which lands first. */
+  const build = (withOppThreat: boolean): GameState => {
+    const { cells, stones } = blank();
+    for (const c of [1, 2, 3]) { stones[P(4, c)] = 1; cells[P(4, c)] = 1; }
+    for (const r of [1, 2, 3]) { stones[P(r, 4)] = 1; cells[P(r, 4)] = 1; }
+    cells[P(4, 4)] = 1; // double-threat square
+    cells[P(4, 5)] = 1;
+    cells[P(5, 4)] = 1;
+    for (const [r, c] of [[0, 0], [0, 1], [1, 0], [8, 8], [8, 7], [7, 8]]) {
+      cells[P(r, c)] = 1; // neutral room for earned cells
+    }
+    if (withOppThreat) {
+      for (let c = 4; c < 8; c++) { stones[P(10, c)] = 2; cells[P(10, c)] = 1; }
+      cells[P(10, 8)] = 1; // sole completion — (10,3) stays a hole
+    }
+    return mkState(cells, stones, 1);
+  };
+
+  it('takes the 2-ply forced win when nothing is threatening us', () => {
+    const s = build(false);
+    expect(isHardProvedWin(s, P(4, 4), 2)).toBe(true);
+    expect(vcfScan(s, 2)![0]).toBe(P(4, 4));
+    expect(forcedBlock(s)).toBeNull();
+  });
+
+  it('abandons that win once the opponent completes five first', () => {
+    const s = build(true);
+    expect(completionCells(s.cells, s.stones, 2)).toEqual(new Set([P(10, 8)]));
+    // the winning move no longer proves: the opponent lands first
+    expect(isHardProvedWin(s, P(4, 4), 2)).toBe(false);
+    expect(vcfScan(s, 2)).toBeNull();
+    // ...so the block is what gets played
+    expect(forcedBlock(s)).toBe(P(10, 8));
+  });
+});
+
+describe('isHardProvedWin / vcfScan', () => {
+  it('cross double-threat stone is a proved win', () => {
+    expect(isHardProvedWin(crossDoubleThreat(1), P(4, 4), 2)).toBe(true);
   });
 
   it('tempo-0 regression: scan plays the immediate win, not a preserving move', () => {
@@ -286,24 +415,22 @@ describe('classifyMove / vcfScan', () => {
     const comp = completionCells(s.cells, s.stones, 1);
     expect(comp).toEqual(new Set([P(4, 1), P(6, 1)]));
 
-    // the nothing-move is ALSO HARD — ordering is exactly what's under test
-    expect(classifyMove(s, 0, 2)).toBe(ProvedStatus.HARD_PROVED_WIN);
+    // the nothing-move ALSO proves — ordering is exactly what's under test
+    expect(isHardProvedWin(s, 0, 2)).toBe(true);
 
-    const seq = vcfScan(s, null, 2);
+    const seq = vcfScan(s, 2);
     expect(seq).not.toBeNull();
     expect(seq).toHaveLength(1);
     expect(comp.has(seq![0])).toBe(true);
     expect(seq![0]).not.toBe(0);
   });
 
-  it('scan returns [stone, ...cells] and tags visited children', () => {
+  it('scan returns the full [stone, ...cells] sequence', () => {
     const s = crossDoubleThreat(1);
-    const child: { proved: ProvedStatusValue } = { proved: ProvedStatus.UNKNOWN };
-    const root = { children: new Map([[P(4, 4), child]]) };
-    const seq = vcfScan(s, root, 2);
+    const seq = vcfScan(s, 2);
     expect(seq).not.toBeNull();
     expect(seq![0]).toBe(P(4, 4));
-    expect(child.proved).toBe(ProvedStatus.HARD_PROVED_WIN);
+    expect(seq!.length).toBeGreaterThan(1); // the proving stone earns K=2 cells
   });
 
   it('prefilter skips sparse boards (opening)', () => {
@@ -312,6 +439,6 @@ describe('classifyMove / vcfScan', () => {
       for (let dc = -1; dc <= 1; dc++)
         if (dr || dc) cells[P(7 + dr, 7 + dc)] = 1;
     const s = mkState(cells, new Uint8Array(BOARD_CELLS), 1);
-    expect(vcfScan(s, null, 2)).toBeNull();
+    expect(vcfScan(s, 2)).toBeNull();
   });
 });

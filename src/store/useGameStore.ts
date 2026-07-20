@@ -303,6 +303,17 @@ export const useGameStore = create<GameStore>()(
         language: state.language,
         agentConfig: state.agentConfig,
       }),
+      // The default merge is shallow, so a stored agentConfig from an older
+      // build would replace the defaults wholesale and leave newly added knobs
+      // undefined. Merge it field-wise instead.
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<GameStore>;
+        return {
+          ...current,
+          ...p,
+          agentConfig: { ...current.agentConfig, ...(p.agentConfig ?? {}) },
+        };
+      },
     }
   )
 );

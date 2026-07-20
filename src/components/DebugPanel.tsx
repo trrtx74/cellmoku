@@ -134,7 +134,19 @@ export const DebugPanel = () => {
               onChange={(e) => setAgentConfig({ temperature: Number(e.target.value) })}
             />
           </Field>
+          <Field>
+            <span>cellTemp {agentConfig.cellTemperature.toFixed(2)}</span>
+            <input
+              type="range"
+              min={0}
+              max={2}
+              step={0.01}
+              value={agentConfig.cellTemperature}
+              onChange={(e) => setAgentConfig({ cellTemperature: Number(e.target.value) })}
+            />
+          </Field>
           {numField('tempMoves', 'tempMoves', agentConfig, setAgentConfig)}
+          {numField('cellTempMoves', 'cellTempMoves', agentConfig, setAgentConfig)}
           {numField('vcfMaxPly', 'vcfMaxPly', agentConfig, setAgentConfig)}
           <Field>
             <span>useVcf</span>
