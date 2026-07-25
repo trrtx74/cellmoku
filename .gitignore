@@ -30,3 +30,5 @@ py_reference
 # .md files
 PLAN.md
 SUPABASE_SETUP.md
+# arena (dev-only) generated models
+arena/
