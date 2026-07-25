@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import styled from 'styled-components';
 import { useGameStore } from '../store/useGameStore';
-import type { AgentConfig } from '../services/agent/types';
+import { presetFor, type AgentConfig } from '../services/agent/types';
 
 const Panel = styled.div<{ $open: boolean }>`
   position: fixed;
@@ -75,7 +75,16 @@ const SmallButton = styled.button`
   border: 1px solid #2b4468;
   border-radius: 6px;
   font-size: 0.75rem;
-  &:hover { background: #24457a; }
+  &:hover:not(:disabled) { background: #24457a; }
+  &:disabled { opacity: 0.4; cursor: default; }
+`;
+
+const ApplyButton = styled(SmallButton)`
+  background: ${({ disabled }) => (disabled ? '#1b2c4c' : '#2563eb')};
+  border-color: #3b82f6;
+  color: #fff;
+  font-weight: 700;
+  &:hover:not(:disabled) { background: #1d4ed8; }
 `;
 
 const Meta = styled.div`
@@ -104,14 +113,24 @@ const numField = (
 );
 
 export const DebugPanel = () => {
-  const { agentConfig, setAgentConfig, resetAgentConfig, cpuDifficulty, lastCpuMs, mode } =
-    useGameStore();
-  const [open, setOpen] = useState(true);
+  const { agentConfig, setAgentConfig, cpuDifficulty, lastCpuMs, mode } = useGameStore();
+  // collapsed by default; edits live in a local draft until Apply commits them
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<AgentConfig>(agentConfig);
+
+  const toggle = () => {
+    // opening loads the currently-applied config; closing discards the draft
+    if (!open) setDraft({ ...agentConfig });
+    setOpen((v) => !v);
+  };
+
+  const patch = (p: Partial<AgentConfig>) => setDraft((d) => ({ ...d, ...p }));
+  const dirty = JSON.stringify(draft) !== JSON.stringify(agentConfig);
 
   return (
     <Panel $open={open}>
-      <Header onClick={() => setOpen((o) => !o)}>
-        <span>⚙ AGENT DEBUG</span>
+      <Header onClick={toggle}>
+        <span>⚙ AGENT DEBUG{!open && dirty ? ' *' : ''}</span>
         <span>{open ? '▾' : '▸'}</span>
       </Header>
       {open && (
@@ -121,39 +140,39 @@ export const DebugPanel = () => {
             <span>{mode === 'VS_CPU' ? 'vs cpu' : 'vs human'}</span>
           </Meta>
 
-          {numField('sims', 'sims', agentConfig, setAgentConfig)}
-          {numField('cellSims', 'cellSims', agentConfig, setAgentConfig)}
+          {numField('sims', 'sims', draft, patch)}
+          {numField('cellSims', 'cellSims', draft, patch)}
           <Field>
-            <span>temp {agentConfig.temperature.toFixed(2)}</span>
+            <span>temp {draft.temperature.toFixed(2)}</span>
             <input
               type="range"
               min={0}
               max={2}
               step={0.01}
-              value={agentConfig.temperature}
-              onChange={(e) => setAgentConfig({ temperature: Number(e.target.value) })}
+              value={draft.temperature}
+              onChange={(e) => patch({ temperature: Number(e.target.value) })}
             />
           </Field>
           <Field>
-            <span>cellTemp {agentConfig.cellTemperature.toFixed(2)}</span>
+            <span>cellTemp {draft.cellTemperature.toFixed(2)}</span>
             <input
               type="range"
               min={0}
               max={2}
               step={0.01}
-              value={agentConfig.cellTemperature}
-              onChange={(e) => setAgentConfig({ cellTemperature: Number(e.target.value) })}
+              value={draft.cellTemperature}
+              onChange={(e) => patch({ cellTemperature: Number(e.target.value) })}
             />
           </Field>
-          {numField('tempMoves', 'tempMoves', agentConfig, setAgentConfig)}
-          {numField('cellTempMoves', 'cellTempMoves', agentConfig, setAgentConfig)}
-          {numField('vcfMaxPly', 'vcfMaxPly', agentConfig, setAgentConfig)}
+          {numField('tempMoves', 'tempMoves', draft, patch)}
+          {numField('cellTempMoves', 'cellTempMoves', draft, patch)}
+          {numField('vcfMaxPly', 'vcfMaxPly', draft, patch)}
           <Field>
             <span>useVcf</span>
             <input
               type="checkbox"
-              checked={agentConfig.useVcf}
-              onChange={(e) => setAgentConfig({ useVcf: e.target.checked })}
+              checked={draft.useVcf}
+              onChange={(e) => patch({ useVcf: e.target.checked })}
             />
           </Field>
 
@@ -163,12 +182,15 @@ export const DebugPanel = () => {
           </Meta>
 
           <Row>
-            <SmallButton onClick={resetAgentConfig}>
+            <ApplyButton disabled={!dirty} onClick={() => setAgentConfig(draft)}>
+              {dirty ? 'apply' : 'applied'}
+            </ApplyButton>
+            <SmallButton onClick={() => setDraft(presetFor(cpuDifficulty))}>
               reset → {cpuDifficulty} preset
             </SmallButton>
           </Row>
           <Meta>
-            <span style={{ fontStyle: 'italic' }}>onnx engine · mock fallback uses temp only</span>
+            <span style={{ fontStyle: 'italic' }}>edits apply on “apply”; collapsing discards</span>
           </Meta>
         </Body>
       )}
