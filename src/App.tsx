@@ -12,7 +12,8 @@ import { DebugPanel } from './components/DebugPanel';
 import { useGameStore } from './store/useGameStore';
 
 // const DEBUG = import.meta.env.DEV;
-const DEBUG = true;
+// const DEBUG = true;
+const DEBUG = false;
 
 const Container = styled.div`
   width: 100vw;

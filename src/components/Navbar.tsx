@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import { useGameStore, type Difficulty } from '../store/useGameStore';
+import { useGameStore, DIFFS, DIFF_LABELS, type Difficulty } from '../store/useGameStore';
 import { FaHome, FaGlobe, FaQuestion, FaTrophy } from "react-icons/fa";
 import { useState } from 'react';
 
@@ -134,13 +134,6 @@ const StatsTable = styled.table`
   }
 `
 
-const DIFFS: Difficulty[] = ['easy', 'medium', 'hard'];
-const DIFF_LABEL: Record<Difficulty, { ko: string; en: string }> = {
-  easy: { ko: '하수', en: 'Easy' },
-  medium: { ko: '중수', en: 'Medium' },
-  hard: { ko: '고수', en: 'Hard' },
-};
-
 export const Navbar = ({ onOpenHelp }: NavbarProps) => {
   const {
     language, setLanguage, status, quitGame, vsCpuStats, resetStats, mode,
@@ -210,7 +203,7 @@ export const Navbar = ({ onOpenHelp }: NavbarProps) => {
                   const s = sideWLD(d, 'asSecond');
                   return (
                     <tr key={d}>
-                      <td>{DIFF_LABEL[d][language]}</td>
+                      <td>{DIFF_LABELS[d][language]}</td>
                       <td>{`${f.w}/${f.l}/${f.d}`}</td>
                       <td>{`${s.w}/${s.l}/${s.d}`}</td>
                     </tr>

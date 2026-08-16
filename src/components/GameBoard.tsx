@@ -10,7 +10,8 @@ import { loadAgent, type CellmokuAgent } from '../services/agent';
 import { presetFor } from '../services/agent/types';
 
 // const DEBUG = import.meta.env.DEV;
-const DEBUG = true;
+const DEBUG = false;
+// const DEBUG = true;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const BoardContainer = styled.div`
@@ -21,7 +22,7 @@ const BoardContainer = styled.div`
   width: 100%;
   height: 100%;
   padding: 16px;
-  gap: 14px;
+  /* gap: 14px; */
   position: relative;
 
   @media (max-width: 768px) {
@@ -37,6 +38,49 @@ const StatusBar = styled.div`
   min-height: 32px;
   font-weight: 600;
   color: ${({ theme }) => theme.colors.text};
+  margin-top: 14px;
+  /* background-color: pink; */
+`;
+
+const CellIndicator = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px; /* reserve space so the board doesn't jump */
+  margin-bottom: 14px;
+  /* background-color: gold; */
+`;
+
+const IndicatorLabel = styled.span`
+  font-size: 0.8rem;
+  color: ${({ theme }) => theme.colors.textSecondary};
+  margin-right: 2px;
+`;
+
+// A little object shaped like a board cell (rounded square + owner tag),
+// so the count reads as "cells" rather than an abstract number.
+const CellChip = styled.span<{ $color: 'BLACK' | 'WHITE' }>`
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 22%;
+  background: ${({ theme }) => theme.colors.cell};
+  border: 1px solid ${({ theme }) => theme.colors.border};
+
+  /* &::before {
+    content: '';
+    position: absolute;
+    top: 9%;
+    left: 9%;
+    width: 30%;
+    height: 30%;
+    border-radius: 30%;
+    background: ${({ theme, $color }) =>
+      $color === 'BLACK' ? theme.colors.stoneBlack : theme.colors.stoneWhite};
+    border: 1px solid
+      ${({ theme, $color }) =>
+        $color === 'BLACK' ? theme.colors.stoneBlack : theme.colors.stoneWhiteBorder};
+  } */
 `;
 
 const Dot = styled.span<{ $color: 'BLACK' | 'WHITE' }>`
@@ -50,35 +94,38 @@ const Dot = styled.span<{ $color: 'BLACK' | 'WHITE' }>`
       $color === 'BLACK' ? '#0B1220' : theme.colors.stoneWhiteBorder};
 `;
 
-const ResultOverlay = styled.div`
-  position: absolute;
-  inset: 0;
+// The result takes the controls' slot instead of covering the board, so the
+// final position stays readable and the buttons never appear under the cursor
+// that just placed the winning stone.
+const ResultContainer = styled.div`
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  background: rgba(245, 248, 252, 0.82);
-  backdrop-filter: blur(3px);
-  z-index: 20;
+  flex-wrap: wrap;
+  gap: 12px;
 `;
 
 const ResultText = styled.div`
-  font-size: 2.4rem;
+  font-size: 1.4rem;
   font-weight: 800;
   color: ${({ theme }) => theme.colors.primary};
 `;
 
-const ResultButton = styled.button`
-  padding: 14px 28px;
-  font-size: 1.2rem;
+const ResultButton = styled.button<{ $secondary?: boolean }>`
+  padding: 10px 20px;
+  font-size: 1rem;
   font-weight: 700;
-  background: ${({ theme }) => theme.colors.primary};
-  color: #fff;
-  border-radius: 14px;
+  background: ${({ theme, $secondary }) =>
+    $secondary ? theme.colors.surface : theme.colors.primary};
+  color: ${({ theme, $secondary }) => ($secondary ? theme.colors.textSecondary : '#fff')};
+  border: 1px solid
+    ${({ theme, $secondary }) => ($secondary ? theme.colors.border : theme.colors.primary)};
+  border-radius: 12px;
   transition: ${({ theme }) => theme.transitions.fast};
+
   &:hover {
-    background: ${({ theme }) => theme.colors.primaryHover};
+    background: ${({ theme, $secondary }) =>
+      $secondary ? theme.colors.primaryLight : theme.colors.primaryHover};
   }
 `;
 
@@ -239,11 +286,21 @@ const GameBoard = () => {
     if (game.phase === 'STONE') {
       return language === 'ko' ? '말을 놓을 위치를 선택하세요' : 'Place a stone';
     }
-    const left = game.remainingK;
-    return language === 'ko'
-      ? `획득한 칸 배치 (${left}개 남음)`
-      : `Place earned cells (${left} left)`;
+    return language === 'ko' ? '획득한 칸을 배치하세요' : 'Place your earned cells';
   })();
+
+  // How many cell-chips to show: STONE phase previews the cells the current
+  // hover would earn (bands = adjacent own stones); CELL phase shows cells left
+  // to place. Only meaningful on the human's active turn.
+  const indicatorCount = !isHumanTurn || game.winner
+    ? 0
+    : game.phase === 'STONE'
+      ? bands.length
+      : game.remainingK;
+  const indicatorLabel = game.phase === 'STONE' && '+';
+  // const indicatorLabel = game.phase === 'STONE'
+  //   ? (language === 'ko' ? '얻는 칸' : 'earning')
+  //   : (language === 'ko' ? '남은 칸' : 'to place');
 
   const resultText = (() => {
     if (!game.winner) return '';
@@ -261,12 +318,31 @@ const GameBoard = () => {
   return (
     <BoardContainer>
 
-      <GameControls />
+      {status === 'ENDED' ? (
+        <ResultContainer>
+          <ResultText>{resultText}</ResultText>
+          <ResultButton onClick={restart}>
+            {language === 'ko' ? '다시 시작' : 'Play again'}
+          </ResultButton>
+          <ResultButton $secondary onClick={quitGame}>
+            {language === 'ko' ? '메뉴로' : 'Menu'}
+          </ResultButton>
+        </ResultContainer>
+      ) : (
+        <GameControls />
+      )}
 
       <StatusBar>
         {!game.winner && <Dot $color={activeColor} />}
         <span>{phaseText}</span>
       </StatusBar>
+
+      <CellIndicator>
+        {indicatorCount > 0 && <IndicatorLabel>{indicatorLabel}</IndicatorLabel>}
+        {Array.from({ length: indicatorCount }).map((_, i) => (
+          <CellChip key={i} $color={activeColor} />
+        ))}
+      </CellIndicator>
 
       <Board
         view={view}
@@ -279,20 +355,6 @@ const GameBoard = () => {
         onHover={handleHover}
         onLeave={() => setCursor(null)}
       />
-      
-      {status === 'ENDED' && (
-        <ResultOverlay>
-          <ResultText>{resultText}</ResultText>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <ResultButton onClick={restart}>
-              {language === 'ko' ? '다시 시작' : 'Play again'}
-            </ResultButton>
-            <ResultButton onClick={quitGame} style={{ background: '#64748B' }}>
-              {language === 'ko' ? '메뉴로' : 'Menu'}
-            </ResultButton>
-          </div>
-        </ResultOverlay>
-      )}
     </BoardContainer>
   );
 };

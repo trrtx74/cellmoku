@@ -48,9 +48,9 @@ export interface CellmokuAgent {
 // ~6 s at 128. This runs in a worker, so it delays the CPU's reply without
 // freezing the UI.
 export const PRESETS: Record<Difficulty, AgentConfig> = {
-  easy: { sims: 32, cellSims: 32, temperature: 0.0, tempMoves: 0, cellTemperature: 0.0, cellTempMoves: 0, useVcf: true, vcfMaxPly: 2 },
-  medium: { sims: 64, cellSims: 64, temperature: 0.0, tempMoves: 0, cellTemperature: 0.0, cellTempMoves: 0, useVcf: true, vcfMaxPly: 2 },
-  hard: { sims: 128, cellSims: 128, temperature: 0.0, tempMoves: 0, cellTemperature: 0.0, cellTempMoves: 0, useVcf: true, vcfMaxPly: 2 },
+  easy: { sims: 16, cellSims: 16, temperature: 2.0, tempMoves: 999, cellTemperature: 2.0, cellTempMoves: 999, useVcf: true, vcfMaxPly: 1 },
+  medium: { sims: 16, cellSims: 16, temperature: 1.5, tempMoves: 999, cellTemperature: 1.5, cellTempMoves: 999, useVcf: true, vcfMaxPly: 2 },
+  hard: { sims: 32, cellSims: 32, temperature: 1.0, tempMoves: 10, cellTemperature: 1.0, cellTempMoves: 10, useVcf: true, vcfMaxPly: 2 },
 };
 
 export const presetFor = (d: Difficulty): AgentConfig => ({ ...PRESETS[d] });

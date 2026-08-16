@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import { useGameStore, type Difficulty } from '../store/useGameStore';
+import { useGameStore, DIFFS, DIFF_LABELS } from '../store/useGameStore';
 
 const Container = styled.div`
   display: flex;
@@ -50,12 +50,6 @@ const BackButton = styled.button`
   text-decoration: underline;
 `;
 
-const LABELS: Record<Difficulty, { ko: string; en: string }> = {
-  easy: { ko: '하수', en: 'Easy' },
-  medium: { ko: '중수', en: 'Medium' },
-  hard: { ko: '고수', en: 'Hard' },
-};
-
 export const DifficultySelect = () => {
   const { language, chooseDifficulty, quitGame } = useGameStore();
 
@@ -63,9 +57,9 @@ export const DifficultySelect = () => {
     <Container>
       <Heading>{language === 'ko' ? '난이도 선택' : 'Select Difficulty'}</Heading>
       <ButtonGroup>
-        {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
+        {DIFFS.map((d) => (
           <DiffButton key={d} onClick={() => chooseDifficulty(d)}>
-            {LABELS[d][language]}
+            {DIFF_LABELS[d][language]}
           </DiffButton>
         ))}
       </ButtonGroup>

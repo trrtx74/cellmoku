@@ -16,6 +16,12 @@ import { presetFor, type AgentConfig } from '../services/agent/types';
 import { logGameResult } from '../services/gameLog';
 
 export type Difficulty = 'easy' | 'medium' | 'hard';
+export const DIFFS: Difficulty[] = ['easy', 'medium', 'hard'];
+export const DIFF_LABELS: Record<Difficulty, { ko: string; en: string }> = {
+  easy: { ko: '입문자', en: 'Easy' },
+  medium: { ko: '숙련자', en: 'Medium' },
+  hard: { ko: '전문가', en: 'Hard' },
+};
 export type Status = 'IDLE' | 'DIFFICULTY_SELECT' | 'PLAYING' | 'ENDED';
 
 // losses are derived: played - wins - draws
