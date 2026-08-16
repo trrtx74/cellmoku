@@ -448,7 +448,7 @@ Error generating stack: `+n.message+`
   &:active {
     transform: translateY(0);
   }
-`,_p=()=>{const{startGame:a,language:c}=Wl();return T.jsxs(Ep,{children:[T.jsxs("div",{children:[T.jsx(Ap,{children:"CELLMOKU"}),T.jsx(zp,{children:c==="ko"?"개척 오목":"Frontier Gomoku"})]}),T.jsxs(Tp,{children:[T.jsx("p",{children:c==="ko"?"말을 놓고, 획득한 칸으로 보드를 넓혀 나가세요.":"Place stones and expand the board with the cells you earn."}),T.jsx("p",{children:c==="ko"?"먼저 5개를 나란히 잇는 사람이 승리합니다.":"The first to connect five in a row wins."})]}),T.jsxs(Cp,{children:[T.jsx(R1,{onClick:()=>a("VS_CPU"),children:c==="ko"?"CPU와 대결":"VS CPU"}),T.jsx(R1,{onClick:()=>a("VS_HUMAN"),children:c==="ko"?"2인 대결":"2 Players"})]})]})},Op=tt.div`
+`,_p=()=>{const{startGame:a,language:c}=Wl();return T.jsxs(Ep,{children:[T.jsxs("div",{children:[T.jsx(Ap,{children:"CELLMOKU"}),T.jsx(zp,{children:c==="ko"&&"개척 오목"})]}),T.jsxs(Tp,{children:[T.jsx("p",{children:c==="ko"?"말을 놓고, 획득한 칸으로 보드를 넓혀 나가세요.":"Place stones and expand the board with the cells you earn."}),T.jsx("p",{children:c==="ko"?"먼저 5개를 나란히 잇는 사람이 승리합니다.":"The first to connect five in a row wins."})]}),T.jsxs(Cp,{children:[T.jsx(R1,{onClick:()=>a("VS_CPU"),children:c==="ko"?"CPU와 대결":"VS CPU"}),T.jsx(R1,{onClick:()=>a("VS_HUMAN"),children:c==="ko"?"2인 대결":"2 Players"})]})]})},Op=tt.div`
   display: flex;
   flex-direction: column;
   align-items: center;
