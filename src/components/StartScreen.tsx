@@ -88,7 +88,7 @@ export const StartScreen = () => {
     <Container>
       <div>
         <Logo>CELLMOKU</Logo>
-        <Tagline>{language === 'ko' ? '개척 오목' : 'Frontier Gomoku'}</Tagline>
+        <Tagline>{language === 'ko' && '개척 오목'}</Tagline>
       </div>
 
       <RulesCard>
